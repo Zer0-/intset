@@ -1,7 +1,6 @@
 {-# OPTIONS -fno-warn-orphans #-}
 module Main (main) where
 
-import Control.Applicative hiding (empty)
 import Test.QuickCheck hiding ((.&.))
 import Test.Framework
 import Test.Framework.Providers.QuickCheck2
@@ -9,7 +8,6 @@ import Test.Framework.Providers.QuickCheck2
 import Data.List as L (sort, nub, map, filter, minimum, intersect)
 import Data.IntervalSet as S
 import Data.IntervalSet.ByteString as S
-import Data.Monoid
 
 
 
@@ -21,9 +19,11 @@ instance Arbitrary IntSet where
         where
           mk i = [i * 64 .. i * 64 + 64]
 
+{-
   shrink (Bin _ _ l r) = [l, r]
   shrink (Fin p m)     = [splitFin p m]
   shrink  _            = []
+-}
 
 prop_empty :: [Int] -> Bool
 prop_empty xs = (not . (`member` empty)) `all` xs
@@ -45,8 +45,10 @@ prop_unionLookup a b = all (`member` u) a && all (`member` u) b
 prop_sorted :: IntSet -> Bool
 prop_sorted xs = toList xs == L.nub (L.sort (toList xs))
 
+{-
 prop_valid :: IntSet -> Bool
 prop_valid = isValid
+-}
 
 prop_unionSize :: IntSet -> IntSet -> Bool
 prop_unionSize a b = size u >= size a
@@ -425,7 +427,7 @@ main = defaultMain
   , testProperty "partition filter"          prop_partition
 
   , testProperty "min"                  prop_min
-  , testProperty "valid"                prop_valid
+  --, testProperty "valid"                prop_valid
 
     -- for coverage mostly
   , testProperty "delete from empty"    prop_deleteEmpty

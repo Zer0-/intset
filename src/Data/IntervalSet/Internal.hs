@@ -13,11 +13,12 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 #endif
 
+{-# LANGUAGE DeriveGeneric #-}
+
 -- TODO use 'seq' instead of bang patterns
 {-# LANGUAGE BangPatterns #-}
 
 #if __GLASGOW_HASKELL__ >= 720
--- TODO The only unsafe import is Data.Bits.Extras
 {-# LANGUAGE Trustworthy #-}
 #endif
 
@@ -118,13 +119,11 @@ module Data.IntervalSet.Internal
 
 
 import Control.DeepSeq
+import GHC.Generics (Generic)
 import Data.Bits as Bits
-import Data.Bits.Extras
 import Data.Data
 import qualified Data.List as L
-import Data.Monoid
 import Data.Ord
-import Data.Word
 
 
 -- machine specific properties of basic types
@@ -203,6 +202,7 @@ data IntSet
 #if defined(__GLASGOW_HASKELL__)
     , Typeable, Data
 #endif
+    , Generic
     )
 
 {--------------------------------------------------------------------
@@ -266,6 +266,9 @@ instance Ord IntSet where
   compare = comparing toList
   -- TODO make it faster
 
+instance Semigroup IntSet where
+    (<>) = union
+
 instance Monoid IntSet where
   mempty  = empty
   mappend = union
@@ -298,6 +301,9 @@ instance NFData IntSet where
 newtype Union = Union { getUnion :: IntSet }
                 deriving (Show, Read, Eq, Ord)
 
+instance Semigroup Union where
+    (Union a) <> (Union b) = Union (union a b)
+
 instance Monoid Union where
   mempty      = Union empty
   mappend a b = Union (getUnion a `union` getUnion b)
@@ -310,6 +316,9 @@ instance Monoid Union where
 newtype Intersection = Intersection { getIntersection :: IntSet }
                        deriving (Show, Read, Eq, Ord)
 
+instance Semigroup Intersection where
+    (Intersection a) <> (Intersection b) = Intersection (intersection a b)
+
 instance Monoid Intersection where
   mempty      = Intersection universe
   mappend a b = Intersection (getIntersection a `intersection` getIntersection b)
@@ -321,6 +330,9 @@ instance Monoid Intersection where
 --
 newtype Difference = Difference { getDifference :: IntSet }
                      deriving (Show, Read, Eq, Ord)
+
+instance Semigroup Difference where
+    (Difference a) <> (Difference b) = Difference (symDiff a b)
 
 instance Monoid Difference where
   mempty      = Difference empty
@@ -1085,7 +1097,7 @@ findMin (Fin p _)  = p
 findMin  Nil       = error "findMin: empty set"
 
 findMinBM :: BitMap -> Int
-findMinBM = fromIntegral . trailingZeros
+findMinBM = fromIntegral . Bits.countTrailingZeros
 {-# INLINE findMinBM #-}
 
 
@@ -1107,7 +1119,7 @@ findMax (Fin p m ) = p + m - 1
 findMax  Nil       = error "findMax: empty set"
 
 findMaxBM :: BitMap -> Int
-findMaxBM x = fromIntegral ((WORD_SIZE_IN_BITS - 1) - leadingZeros x)
+findMaxBM x = fromIntegral ((WORD_SIZE_IN_BITS - 1) - Bits.countLeadingZeros x)
 {-# INLINE findMaxBM #-}
 
 {--------------------------------------------------------------------
@@ -1125,17 +1137,11 @@ unstream = fromList
 {-# RULES
   "IntSet/stream/unstream"  [~3] forall x. stream (unstream x) = x;
   "IntSet/unstream/stream"  [~3] forall x. unstream (stream x) = x;
-  "IntSet/stream/fromList"  [ 3] forall x. stream (fromList x) = x;
-  "IntSet/unstream/toList"  [ 3] forall x. toList (unstream x) = x
   #-}
 
 {--------------------------------------------------------------------
    Map/fold/filter
 --------------------------------------------------------------------}
-
-{-# RULES
-  "IntSet/map/id" Data.IntervalSet.Internal.map id = id
-  #-}
 
 -- | /O(n * min(W, n))/.
 --   Apply the function to each element of the set.
@@ -1143,9 +1149,9 @@ unstream = fromList
 --   Do not use this operation with the 'universe', 'naturals' or
 --   'negatives' sets.
 --
+{-# INLINE map #-}
 map :: (Key -> Key) -> IntSet -> IntSet
 map f = unstream . L.map f . stream
-{-# INLINE map #-}
 
 -- | /O(n)/.  Fold the element using the given right associative
 --   binary operator.
@@ -1183,24 +1189,15 @@ listFin p m = [p..(p + m) - 1]
   List conversions
 --------------------------------------------------------------------}
 
-{-# RULES
-  "IntSet/toList/fromList"      forall x. fromList (toList x) = x;
-  "IntSet/toList/fromList/comp"           fromList . toList   = id;
-  "IntSet/fromList/toList"      forall x. toList (fromList x) = x;
-  "IntSet/fromList/toList/comp"           toList . fromList   = id
-  #-}
-
 -- | /O(n * min(W, n))/ or /O(n)/.
 --  Create a set from a list of its elements.
 --
 fromList :: [Key] -> IntSet
 fromList = L.foldl' (flip insert) empty
-{-# NOINLINE [3] fromList #-}
 
 -- | /O(n)/. Convert the set to a list of its elements.
 toList :: IntSet -> [Key]
 toList = Data.IntervalSet.Internal.foldr (:) []
-{-# NOINLINE [3] toList #-}
 
 
 -- | 'elems' is alias to 'toList' for compatibility.
@@ -1517,7 +1514,7 @@ finMask m = m `shiftR` 1
 ----------------------------------------------------------------------}
 
 suffixBitMask :: Int
-suffixBitMask = bitSize (undefined :: Word) - 1
+suffixBitMask = finiteBitSize (undefined :: Word) - 1
 {-# INLINE suffixBitMask #-}
 
 prefixBitMask :: Int

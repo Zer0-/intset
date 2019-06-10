@@ -4,23 +4,21 @@ let
 
   inherit (nixpkgs) pkgs;
 
-  f = { mkDerivation, base, bits-extras, bytestring, deepseq
+  f = { mkDerivation, base, bytestring, deepseq
       , stdenv, cabal-install, test-framework-quickcheck2, criterion, QuickCheck
       , test-framework, containers
       }:
       mkDerivation {
         pname = "intset";
         version = "0.1.1.0";
-        sha256 = "044nw8z2ga46mal9pr64vsc714n4dibx0k2lwgnrkk49729c7lk0";
+        src = ./.;
         libraryHaskellDepends = [
           base
-          bits-extras
           bytestring
           deepseq
-          cabal-install
         ];
         testHaskellDepends = [
-          base QuickCheck test-framework test-framework-quickcheck2
+          base QuickCheck test-framework test-framework-quickcheck2 cabal-install
         ];
         benchmarkHaskellDepends = [
           base bytestring containers criterion deepseq
@@ -39,5 +37,5 @@ let
   drv = variant (haskellPackages.callPackage f {});
 
 in
-
-  if pkgs.lib.inNixShell then drv.env else drv
+  drv
+  #if pkgs.lib.inNixShell then drv.env else drv
